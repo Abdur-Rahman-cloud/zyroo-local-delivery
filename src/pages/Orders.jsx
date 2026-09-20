@@ -1,12 +1,21 @@
 import { Link } from "react-router-dom";
-import orders from "../data/orders";
+import { useOrders } from "../context/OrdersContext";
 import StatusBadge from "../components/StatusBadge";
 
 function Orders() {
+  const { orders } = useOrders();
+
   return (
     <div className="orders-page">
-      <h1>Orders</h1>
-      <p>Manage all delivery orders.</p>
+      <div className="orders-header">
+        <div>
+          <h1>Orders</h1>
+          <p>Manage all delivery orders.</p>
+        </div>
+        <Link to="/orders/create" className="btn btn-primary">
+          + Create Order
+        </Link>
+      </div>
 
       <div className="orders-table">
         <table>
@@ -18,7 +27,8 @@ function Orders() {
               <th>Delivery</th>
               <th>Rider</th>
               <th>Status</th>
-              <th>Action</th>
+              <th>Date</th>
+              <th>Actions</th>
             </tr>
           </thead>
 
@@ -33,10 +43,11 @@ function Orders() {
                 <td>
                   <StatusBadge status={order.status} />
                 </td>
+                <td>{order.date}</td>
                 <td>
-                  <Link to={`/orders/${order.id}`}>
-                    View
-                  </Link>
+                  <Link to={`/orders/${order.id}`}>View</Link>
+                  {" · "}
+                  <Link to={`/orders/${order.id}/edit`}>Edit</Link>
                 </td>
               </tr>
             ))}
