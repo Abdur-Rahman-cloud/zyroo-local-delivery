@@ -98,6 +98,19 @@ zyroo-local-delivery/
 ├── package.json
 └── .gitignore
 
+
+
+### Week 4 — Delivery Tracking & Notifications
+- **Tracking Page** — dedicated `/track` and `/track/:id` page showing an order's full delivery status at a glance
+- **Map/Route Interface** — simulated visual route showing Pickup → Rider's current location → Delivery, since no live map API is used
+- **Rider Information Card** — rider name, phone number, vehicle info, and current status shown alongside the tracked order
+- **Delivery Timeline** — step-by-step progress (Order Created → Rider Assigned → Picked Up → In Transit → Delivered) with timestamps
+- **Estimated Delivery** — simulated ETA shown on the tracking page
+- **Notifications** — bell icon with a badge count in the header; clicking it opens a dropdown of recent order updates
+- **Search Orders** — search by Order ID, customer name, or rider name
+- **Filter Orders** — filter the order list by status and date
+- **Responsive Tracking Page** — layout adapts to mobile, tablet, and desktop, keeping the map, status, and rider info readable at every size
+
 ## Notes
 
 This is a frontend-only prototype built with mock data — there is no real backend, database, authentication, or payment processing. Login is a simple role-picker used to demonstrate role-based views, and all data resets if `localStorage` is cleared.
