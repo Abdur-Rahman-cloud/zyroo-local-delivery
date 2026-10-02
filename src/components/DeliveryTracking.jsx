@@ -1,120 +1,103 @@
 import { useState, useMemo } from "react";
+import { useParams } from "react-router-dom";
+import { useOrders } from "../context/OrdersContext";
+import { useNotifications } from "../context/NotificationsContext";
 import "./DeliveryTracking.css";
 
-// ---- Mock / simulated data (swap with real API data later) ----
-const MOCK_ORDERS = [
-  {
-    id: "ORD-1001",
-    customer: "Bilal Khan",
-    rider: { name: "Usman Ali", phone: "0300-1234567", vehicle: "Honda CD70 - Red", status: "On the way" },
-    pickup: "Mardan",
-    delivery: "Timergara",
-    riderLocation: "Chakdara",
-    status: "In Transit",
-    eta: "25 minutes",
-    date: "2026-09-25",
-    timeline: [
-      { label: "Order Created", time: "10:00 AM", done: true },
-      { label: "Rider Assigned", time: "10:05 AM", done: true },
-      { label: "Picked Up", time: "10:20 AM", done: true },
-      { label: "In Transit", time: "10:25 AM", done: true },
-      { label: "Delivered", time: "--", done: false },
-    ],
-  },
-  {
-    id: "ORD-1002",
-    customer: "Ayesha Noor",
-    rider: { name: "Sajid Khan", phone: "0301-9876543", vehicle: "Yamaha YBR - Black", status: "Picking up" },
-    pickup: "Batkhela",
-    delivery: "Dargai",
-    riderLocation: "Batkhela",
-    status: "Order Accepted",
-    eta: "40 minutes",
-    date: "2026-09-25",
-    timeline: [
-      { label: "Order Created", time: "11:00 AM", done: true },
-      { label: "Rider Assigned", time: "11:04 AM", done: true },
-      { label: "Picked Up", time: "--", done: false },
-      { label: "In Transit", time: "--", done: false },
-      { label: "Delivered", time: "--", done: false },
-    ],
-  },
-  {
-    id: "ORD-1003",
-    customer: "Hamza Sheikh",
-    rider: { name: "Fahad Iqbal", phone: "0333-5551212", vehicle: "Suzuki GD110 - Blue", status: "Delivered" },
-    pickup: "Swat",
-    delivery: "Mingora",
-    riderLocation: "Mingora",
-    status: "Delivered",
-    eta: "Delivered",
-    date: "2026-09-24",
-    timeline: [
-      { label: "Order Created", time: "09:00 AM", done: true },
-      { label: "Rider Assigned", time: "09:05 AM", done: true },
-      { label: "Picked Up", time: "09:20 AM", done: true },
-      { label: "In Transit", time: "09:25 AM", done: true },
-      { label: "Delivered", time: "09:50 AM", done: true },
-    ],
-  },
-];
+const STATUS_FLOW = ["Pending", "Assigned", "Accepted", "Picked Up", "In Transit", "Delivered"];
+const STATUS_OPTIONS = ["All", ...STATUS_FLOW];
 
-const NOTIFICATIONS = [
-  { id: 1, text: "Order ORD-1001 is now In Transit", time: "5m ago" },
-  { id: 2, text: "Rider Sajid Khan assigned to ORD-1002", time: "20m ago" },
-  { id: 3, text: "Order ORD-1003 delivered successfully", time: "1h ago" },
-];
+function getEta(status) {
+  switch (status) {
+    case "Pending": return "Awaiting rider assignment";
+    case "Assigned": return "Rider assigned — pickup pending";
+    case "Accepted": return "~35 minutes";
+    case "Picked Up": return "~25 minutes";
+    case "In Transit": return "~15 minutes";
+    case "Delivered": return "Delivered";
+    default: return "—";
+  }
+}
 
-const STATUS_OPTIONS = ["All", "Order Accepted", "In Transit", "Delivered"];
+function formatTime(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
 
 export default function DeliveryTracking() {
-  const [orders] = useState(MOCK_ORDERS);
-  const [selectedId, setSelectedId] = useState(MOCK_ORDERS[0].id);
+  const { id } = useParams();
+  const { orders, loading, error, retry } = useOrders();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+
+  const [selectedId, setSelectedId] = useState(id || null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const [dateFilter, setDateFilter] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
 
   const filteredOrders = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return orders.filter((o) => {
-      const q = search.trim().toLowerCase();
       const matchesSearch =
         !q ||
         o.id.toLowerCase().includes(q) ||
         o.customer.toLowerCase().includes(q) ||
-        o.rider.name.toLowerCase().includes(q);
+        (o.rider || "").toLowerCase().includes(q);
       const matchesStatus = statusFilter === "All" || o.status === statusFilter;
-      const matchesDate = !dateFilter || o.date === dateFilter;
-      return matchesSearch && matchesStatus && matchesDate;
+      return matchesSearch && matchesStatus;
     });
-  }, [orders, search, statusFilter, dateFilter]);
+  }, [orders, search, statusFilter]);
 
-  const selected = orders.find((o) => o.id === selectedId) || filteredOrders[0];
+  const selected =
+    orders.find((o) => o.id === (selectedId || id)) || filteredOrders[0] || orders[0];
+
+  if (loading) return <div className="dt-wrap"><p>Loading delivery data…</p></div>;
+  if (error) {
+    return (
+      <div className="dt-wrap">
+        <p style={{ color: "#b91c1c" }}>{error}</p>
+        <button className="btn" onClick={retry}>Retry</button>
+      </div>
+    );
+  }
+  if (!selected) return <div className="dt-wrap"><p>No orders to track yet.</p></div>;
 
   return (
     <div className="dt-wrap">
-      {/* Top bar */}
       <header className="dt-header">
         <h1>Delivery Tracking</h1>
         <div className="dt-notif-wrap">
           <button className="dt-bell" onClick={() => setNotifOpen((v) => !v)} aria-label="Notifications">
             🔔
-            {NOTIFICATIONS.length > 0 && <span className="dt-badge">{NOTIFICATIONS.length}</span>}
+            {unreadCount > 0 && <span className="dt-badge">{unreadCount}</span>}
           </button>
           {notifOpen && (
             <div className="dt-notif-dropdown">
-              {NOTIFICATIONS.map((n) => (
-                <div key={n.id} className="dt-notif-item">
+              {notifications.length === 0 && <div className="dt-notif-item"><span>No notifications yet.</span></div>}
+              {notifications.slice(0, 10).map((n) => (
+                <div
+                  key={n.id}
+                  className="dt-notif-item"
+                  style={{ opacity: n.read ? 0.6 : 1, cursor: "pointer" }}
+                  onClick={() => markAsRead(n.id)}
+                >
                   <span>{n.text}</span>
-                  <small>{n.time}</small>
+                  <small>{formatTime(n.time)}</small>
                 </div>
               ))}
+              {notifications.length > 0 && (
+                <button className="btn" style={{ width: "100%", marginTop: 6 }} onClick={markAllAsRead}>
+                  Mark all as read
+                </button>
+              )}
             </div>
           )}
         </div>
       </header>
 
-      {/* Search & filters */}
       <div className="dt-controls">
         <input
           className="dt-search"
@@ -128,11 +111,9 @@ export default function DeliveryTracking() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
-        <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
       </div>
 
       <div className="dt-layout">
-        {/* Orders list */}
         <div className="dt-order-list">
           {filteredOrders.map((o) => (
             <button
@@ -148,68 +129,66 @@ export default function DeliveryTracking() {
           {filteredOrders.length === 0 && <p className="dt-empty">No orders match your search/filters.</p>}
         </div>
 
-        {/* Tracking detail */}
-        {selected && (
-          <div className="dt-detail">
-            {/* Simple simulated map / route */}
-            <div className="dt-map">
-              <div className="dt-route">
-                <div className="dt-route-point">
-                  <div className="dt-dot pickup" />
-                  <span>Pickup: {selected.pickup}</span>
-                </div>
-                <div className="dt-route-line" />
-                <div className="dt-route-point">
-                  <div className="dt-dot rider" />
-                  <span>Rider: {selected.riderLocation}</span>
-                </div>
-                <div className="dt-route-line" />
-                <div className="dt-route-point">
-                  <div className="dt-dot delivery" />
-                  <span>Delivery: {selected.delivery}</span>
-                </div>
+        <div className="dt-detail">
+          <div className="dt-map">
+            <div className="dt-route">
+              <div className="dt-route-point">
+                <div className="dt-dot pickup" />
+                <span>Pickup: {selected.pickup}</span>
               </div>
-            </div>
-
-            {/* Status + ETA */}
-            <div className="dt-status-row">
-              <div>
-                <h3>Order Status</h3>
-                <span className={`dt-status-pill ${selected.status.replace(/\s/g, "-").toLowerCase()}`}>
-                  {selected.status}
-                </span>
+              <div className="dt-route-line" />
+              <div className="dt-route-point">
+                <div className="dt-dot rider" />
+                <span>Rider: {selected.rider === "Not Assigned" ? "Not yet assigned" : selected.rider}</span>
               </div>
-              <div>
-                <h3>Estimated Delivery</h3>
-                <p>{selected.eta}</p>
-              </div>
-            </div>
-
-            {/* Timeline */}
-            <div className="dt-timeline">
-              {selected.timeline.map((t, i) => (
-                <div key={i} className={`dt-timeline-step ${t.done ? "done" : ""}`}>
-                  <div className="dt-timeline-dot" />
-                  <div>
-                    <p>{t.label}</p>
-                    <small>{t.time}</small>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Rider info */}
-            <div className="dt-rider-card">
-              <div className="dt-avatar">{selected.rider.name.charAt(0)}</div>
-              <div>
-                <strong>{selected.rider.name}</strong>
-                <p>{selected.rider.phone}</p>
-                <p>{selected.rider.vehicle}</p>
-                <span className="dt-rider-status">{selected.rider.status}</span>
+              <div className="dt-route-line" />
+              <div className="dt-route-point">
+                <div className="dt-dot delivery" />
+                <span>Delivery: {selected.delivery}</span>
               </div>
             </div>
           </div>
-        )}
+
+          <div className="dt-status-row">
+            <div>
+              <h3>Order Status</h3>
+              <span className={`dt-status-pill ${selected.status.replace(/\s/g, "-").toLowerCase()}`}>
+                {selected.status}
+              </span>
+            </div>
+            <div>
+              <h3>Estimated Delivery</h3>
+              <p>{getEta(selected.status)}</p>
+            </div>
+            <div>
+              <h3>Last Updated</h3>
+              <p>{formatTime(selected.lastUpdated) !== "—" ? formatTime(selected.lastUpdated) : selected.date}</p>
+            </div>
+          </div>
+
+          <div className="dt-timeline">
+            {STATUS_FLOW.map((step) => {
+              const done = selected.statusHistory.includes(step);
+              return (
+                <div key={step} className={`dt-timeline-step ${done ? "done" : ""}`}>
+                  <div className="dt-timeline-dot" />
+                  <div>
+                    <p>{step}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="dt-rider-card">
+            <div className="dt-avatar">{(selected.rider || "?").charAt(0)}</div>
+            <div>
+              <strong>{selected.rider === "Not Assigned" ? "No rider assigned" : selected.rider}</strong>
+              {selected.riderPhone && <p>{selected.riderPhone}</p>}
+              <span className="dt-rider-status">{selected.status}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
